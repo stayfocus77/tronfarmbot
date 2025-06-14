@@ -1,4 +1,3 @@
-
 import os
 import sqlite3
 import datetime
@@ -6,13 +5,15 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 # --- Configuration ---
-TOKEN = os.getenv("TOKEN")  # Le token est lu depuis la variable d'environnement Render
+TOKEN = os.getenv("TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+PORT = int(os.environ.get("PORT", 5000))
 ACTIVATION_FEE = 20
 BONUS_WELCOME = 5
 REFERRAL_BONUS = 4
 MIN_WITHDRAWAL = 100
 WITHDRAW_FEE = 10
-INVESTMENT_RETURN = 1.27  # rendement de 27%
+INVESTMENT_RETURN = 1.27
 
 # --- Base de données ---
 conn = sqlite3.connect("tronfarm.db", check_same_thread=False)
@@ -42,7 +43,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         referrer_id = int(args[0]) if args else None
         c.execute("INSERT INTO users (user_id, referrer_id, balance) VALUES (?, ?, ?)", (user_id, referrer_id, BONUS_WELCOME))
         conn.commit()
-        await update.message.reply_text("Bienvenue sur TronFarmBot ! Vous avez reçu 5 TRX de bonus.\n\nVeuillez payer 20 TRX pour activer votre compte et commencer à investir.")
+        await update.message.reply_text(
+            "🚀 Bienvenue sur TronFarmBot !\n\n"
+            "🎁 Vous recevez immédiatement 5 TRX de bonus de bienvenue.\n"
+            "💼 Activez votre compte en versant 20 TRX pour accéder à nos investissements avec 27% de rendement mensuel.\n"
+            "🤝 Invitez vos amis et gagnez 4 TRX pour chaque activation par parrainage.\n\n"
+            "✅ Pour activer votre compte, veuillez envoyer 20 TRX comme indiqué.\n\n"
+            "Nous vous souhaitons d’excellents profits avec TronFarmBot 🚀"
+        )
     else:
         await update.message.reply_text("Vous êtes déjà inscrit sur TronFarmBot !")
 
@@ -114,7 +122,7 @@ async def withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"Retrait de {withdraw_amount} TRX validé après déduction des frais de {WITHDRAW_FEE} TRX.")
 
-# --- Lancement du bot Telegram ---
+# --- Lancement du bot Telegram avec Webhook ---
 
 app = ApplicationBuilder().token(TOKEN).build()
 
@@ -124,5 +132,11 @@ app.add_handler(CommandHandler("invest", invest))
 app.add_handler(CommandHandler("balance", balance))
 app.add_handler(CommandHandler("withdraw", withdraw))
 
-print("Bot en cours de fonctionnement...")
-app.run_polling()
+print("Bot en cours de fonctionnement avec Webhook...")
+
+app.run_webhook(
+    listen="0.0.0.0",
+    port=PORT,
+    url_path="webhook",
+    webhook_url=WEBHOOK_URL
+)
