@@ -44,12 +44,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         c.execute("INSERT INTO users (user_id, referrer_id, balance) VALUES (?, ?, ?)", (user_id, referrer_id, BONUS_WELCOME))
         conn.commit()
         await update.message.reply_text(
-            "🚀 Bienvenue sur TronFarmBot !\n\n"
-            "🎁 Vous recevez immédiatement 5 TRX de bonus de bienvenue.\n"
-            "💼 Activez votre compte en versant 20 TRX pour accéder à nos investissements avec 27% de rendement mensuel.\n"
-            "🤝 Invitez vos amis et gagnez 4 TRX pour chaque activation par parrainage.\n\n"
-            "✅ Pour activer votre compte, veuillez envoyer 20 TRX comme indiqué.\n\n"
-            "Nous vous souhaitons d’excellents profits avec TronFarmBot 🚀"
+            "💎 Bienvenue sur TronFarmBot !\n\n"
+            "🚀 Investissez vos TRX et récoltez des profits jusqu’à +27% par mois 📈\n"
+            "🎁 Bonus de bienvenue de 5 TRX offert 🎉\n"
+            "🤝 Gagnez 4 TRX pour chaque filleul actif grâce au parrainage 💰\n"
+            "🔒 Simple, rapide, 100% automatisé via la blockchain TRON 🔗\n\n"
+            "🌟 Commencez aujourd’hui et faites travailler votre crypto pour vous ! 🚀"
         )
     else:
         await update.message.reply_text("Vous êtes déjà inscrit sur TronFarmBot !")
@@ -140,3 +140,4 @@ app.run_webhook(
     url_path="webhook",
     webhook_url=WEBHOOK_URL
 )
+
