@@ -10,7 +10,6 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 PORT = int(os.environ.get("PORT", 5000))
 ACTIVATION_FEE = 20
 BONUS_WELCOME = 5
-REFERRAL_BONUS = 4
 MIN_WITHDRAWAL = 100
 WITHDRAW_FEE = 10
 INVESTMENT_RETURN = 1.27
@@ -27,7 +26,8 @@ CREATE TABLE IF NOT EXISTS users (
     balance REAL DEFAULT 0,
     invested REAL DEFAULT 0,
     activation_paid INTEGER DEFAULT 0,
-    activation_date TEXT
+    activation_date TEXT,
+    bonus_20_given INTEGER DEFAULT 0
 )
 """)
 conn.commit()
@@ -48,7 +48,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         ["💰 Investir", "📊 Mon solde"],
-        ["🔓 Activer mon compte", "💸 Retirer mes gains"]
+        ["🔓 Activer mon compte", "💸 Retirer mes gains"],
+        ["📈 Tableau de bord", "👥 Mon affiliation"]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -56,7 +57,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "💎 Bienvenue sur TronFarmBot !\n\n"
         "🚀 Investissez vos TRX et récoltez des profits jusqu’à +27% par mois 📈\n"
         "🎁 Bonus de bienvenue de 5 TRX offert 🎉\n"
-        "🤝 Gagnez 4 TRX pour chaque filleul actif grâce au parrainage 💰\n"
         "🔒 Simple, rapide, 100% automatisé via la blockchain TRON 🔗\n\n"
         "🌟 Commencez aujourd’hui et faites travailler votre crypto pour vous ! 🚀",
         reply_markup=reply_markup
@@ -108,19 +108,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(f"Retrait de {withdraw_amount} TRX validé après déduction des frais de {WITHDRAW_FEE} TRX.")
 
-# --- Lancement du bot Telegram avec Webhook ---
+    elif text == "📈 Tableau de bord":
+        c.execute("SELECT balance, invested, activation_date FROM users WHERE user_id = ?", (user_id,))
+        user = c.fetchone()
+        if user:
+            balance, invested, activation_date = user
+            await update.message.reply_text(
+                f"📈 Tableau de bord :\n\n"
+                f"- Total investi : {invested} TRX\n"
+                f"- Solde actuel : {balance} TRX\n"
+                f"- Date d'activation : {activation_date if activation_date else 'Non activé'}"
+            )
+        else:
+            await update.message.reply_text("Aucune information trouvée.")
 
-app = ApplicationBuilder().token(TOKEN).build()
+    elif text == "👥 Mon affiliation":
+        c.execute("SELECT COUNT(*) FROM users WHERE referrer_id = ?", (user_id,))
+        total_referrals = c.fetchone()[0]
 
-app.add_handler(CommandHandler("start", start))
-app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+        await update.message.reply_text(
+            f"👥 Vous avez {total_referrals} filleuls actifs."
+        )
 
-print("Bot en cours de fonctionnement avec Webhook...")
+async d
 
-app.run_webhook(
-    listen="0.0.0.0",
-    port=PORT,
-    url_path="webhook",
-    webhook_url=WEBHOOK_URL
-)
 
